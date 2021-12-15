@@ -105,7 +105,7 @@ Para no eliminar los datos, se podrían imputar de diferentes formas como aplica
 Se seleccionan 50K casos con un muestreo aleatorio para que no se produzcan problemas de rendimiento del sistema.
 
 ```{r message= FALSE, warning=FALSE}
-df_sample_tiempo = df_tiempo_select[sample(nrow(df_tiempo_select), 50000), ]
+df_sample_tiempo = df_tiempo_select[sample(nrow(df_tiempo_select), 5000), ]
 
 # Se obtienen de nuevo los valores missing
 sapply(df_sample_tiempo, function(x) sum(is.na(x)))
@@ -194,27 +194,10 @@ ggplot(data = df_sample_tiempo, aes(x = meter_reading)) + geom_density()+
                     alpha = 0.9)
 ```
 
-Para profundizar más en los valores extremos, se obtiene dichos valores:
-
-```{r message= FALSE, warning=FALSE}
-boxplot.stats(df_sample_tiempo$air_temperature)$out
-boxplot.stats(df_sample_tiempo$dew_temperature)$out
-boxplot.stats(df_sample_tiempo$sea_level_pressure)$out
-boxplot.stats(df_sample_tiempo$wind_speed)$out
-boxplot.stats(df_sample_tiempo$meter_reading)$out
-```
-
 Tras observar los valores, se eliminan aquellos registros cuya temperatura del aire es superior a 50ºC o inferior a -25ºC dado que se consideran temperaturas muy extremas difíciles de conseguir.
 
 Del mismo modo, se eliminan aquellos registros que tienen más de 500K metros cuadrados, se supone que son megasuperficies poco comunes así como medidas de electricidad superiores a 1000.
 
-```{r message= FALSE, warning=FALSE}
-boxplot.stats(df_sample_tiempo$air_temperature)$out
-boxplot.stats(df_sample_tiempo$dew_temperature)$out
-boxplot.stats(df_sample_tiempo$sea_level_pressure)$out
-boxplot.stats(df_sample_tiempo$wind_speed)$out
-boxplot.stats(df_sample_tiempo$meter_reading)$out
-```
 
 ```{r message= FALSE, warning=FALSE}
 df_sample_tiempo = df_sample_tiempo[df_sample_tiempo$air_temperature<=50 && df_sample_tiempo$air_temperature>=-25,]
@@ -242,17 +225,23 @@ El grupo de datos que se va a utilizar ya se ha seleccionado en los puntos anter
 ## Comprobación de la normalidad y homogeneidad de la varianza.
 
 ```{r message= FALSE, warning=FALSE}
-barplot(table(df_sample_tiempo$primary_use))
-aggregate(df_sample_tiempo$primary_use, by=list(df_sample_tiempo$primary_use), FUN=length)
+for (i in names(df_sample_tiempo)){
+  if(is.numeric(df_sample_tiempo[,i])){
+    test=lillie.test(df_sample_tiempo[,i])
+    print(paste0("El p valor de la variable " , i, ' es: ',test$p.value))
+  }
+}
 ```
+Tal y como se puede observar, los p valor tras aplicar el test de normalidad (Kolmogorov-Smirnov) ninguna de las variables tiene una distribución normal. Para ser normal, el p valor tendría que ser superior a 0.05.
+
+A continuación, se hace un test de homocedasticidad para la variable categórica primary_use con la variable target meter_reading que indica la medición del consumo.
 
 ```{r message= FALSE, warning=FALSE}
-if(!require(pryr)){
-    install.packages('pryr', repos='http://cran.us.r-project.org')
-    library(pryr)
-}
-mem_used()
+fligner.test(meter_reading ~ primary_use, data = df_sample_tiempo)
 ```
+
+El resultado es que la varianza no es constante entre los diferentes niveles de la variable primary_use.
+
 
 
   
