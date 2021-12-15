@@ -1,0 +1,258 @@
+---
+title: 'Tipología y ciclo de vida de los datos - PRA2'
+author: "Autor: Enrique Vera Ortiz - Carlos Pintor"
+date: "Diciembre 2021"
+output:
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+    includes:
+      in_header: PEC-header.html
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Librerías que se utilizan en el desarrollo de la práctica:
+
+```{r,eval=TRUE,echo=FALSE,warning=FALSE}
+# Librerías necesarias para la ejecución 
+if(!require(VIM)){
+    install.packages('VIM', repos='http://cran.us.r-project.org')
+    library(VIM)
+}
+if(!require(dplyr)){
+    install.packages('dplyr', repos='http://cran.us.r-project.org')
+    library(dplyr)
+}
+if(!require(ggplot2)){
+    install.packages('ggplot2', repos='http://cran.us.r-project.org')
+    library(ggplot2)
+}
+if(!require(nortest)){
+    install.packages('nortest', repos='http://cran.us.r-project.org')
+    library(nortest)
+}
+
+```
+
+# Descripción del dataset
+
+# Integración y selección de datos a analizar
+
+Lectura y carga del fichero CSV
+
+```{r message= FALSE, warning=FALSE}
+df_tiempo = read.csv('./energy.csv',sep=',')
+```
+
+# Limpieza de los datos
+
+Las variables que se han extraído son las siguientes:
+
+```{r message= FALSE, warning=FALSE}
+names(df_tiempo)
+```
+
+Para reducir la base de datos nos quedaremos únicamente con el tipo de medida 0: electricidad
+
+```{r message= FALSE, warning=FALSE}
+df_tiempo_electricity = df_tiempo[df_tiempo$meter==0,]
+```
+
+Seleccionamos las variables que realmente pueden tener sentido
+
+```{r message= FALSE, warning=FALSE}
+var_select = c("air_temperature","cloud_coverage","dew_temperature","precip_depth_1_hr","sea_level_pressure",
+               "wind_direction","wind_speed","primary_use","square_feet","year_built","floor_count",
+               "meter_reading")
+df_tiempo_select = df_tiempo_electricity[var_select]
+```
+
+Analizamos el tipo de datos y como queda el dataframe final
+
+```{r message= FALSE, warning=FALSE}
+sapply(df_tiempo_select, class)
+dim(df_tiempo_select)
+```
+
+## ¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarías cada uno de estos casos?
+
+Analizamos la existencia de valores missing por campo
+
+```{r message= FALSE, warning=FALSE}
+sapply(df_tiempo_select, function(x) sum(is.na(x)))
+```
+
+Las variable de floor_count, cloud coverage y year_built tienen entre el 50% y 75% de las variables a missing por lo que pueden proporcionar más ruido que otra cosa por lo que podemos eliminarla. Por otro lado más de un 90% de los casos de la precipitación tienen valores -1 (missing) por lo que también se eliminaría.
+
+```{r message= FALSE, warning=FALSE}
+var_select = c("air_temperature","dew_temperature","sea_level_pressure",
+               "wind_direction","wind_speed","primary_use","square_feet","meter_reading")
+df_tiempo_select = df_tiempo_select[var_select]
+sapply(df_tiempo_select, function(x) sum(is.na(x)))
+```
+
+Para no eliminar los datos, se podrían imputar de diferentes formas como aplicando la media general de cada variable o en función de la frecuencia. En este caso se decide imputar estos valores vacíos con el método kNN de la librería VIM, se trata de un algoritmo supervisado que  clasifica cada dato nuevo en el grupo que corresponda, según tenga k vecinos más cerca de un grupo o de otro.
+
+Se seleccionan 50K casos con un muestreo aleatorio para que no se produzcan problemas de rendimiento del sistema.
+
+```{r message= FALSE, warning=FALSE}
+df_sample_tiempo = df_tiempo_select[sample(nrow(df_tiempo_select), 50000), ]
+
+# Se obtienen de nuevo los valores missing
+sapply(df_sample_tiempo, function(x) sum(is.na(x)))
+```
+
+Se imputan los valores NA por KNN
+
+```{r message= FALSE, warning=FALSE}
+df_sample_tiempo$air_temperature = kNN(df_sample_tiempo)$air_temperature
+df_sample_tiempo$dew_temperature = kNN(df_sample_tiempo)$dew_temperature
+df_sample_tiempo$sea_level_pressure = kNN(df_sample_tiempo)$sea_level_pressure
+df_sample_tiempo$wind_direction = kNN(df_sample_tiempo)$wind_direction
+df_sample_tiempo$wind_speed = kNN(df_sample_tiempo)$wind_speed
+```
+
+Por último, se valida que se hayan cargado correctamente los valores missing.
+
+```{r message= FALSE, warning=FALSE}
+sapply(df_sample_tiempo, function(x) sum(is.na(x)))
+```
+
+## Identificación y tratamiento de valores extremos
+
+Se representan gráficamente los boxplot para cada una de las variables marcando en rojo los outliers:
+
+- air_temperature:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = air_temperature)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- dew_temperature:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = dew_temperature)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- sea_level_pressure:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = sea_level_pressure)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- wind_direction:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = wind_direction)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- wind_speed:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = wind_speed)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- square_feet:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = square_feet)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+- meter_reading:
+
+```{r message= FALSE, warning=FALSE}
+ggplot(data = df_sample_tiempo, aes(x = meter_reading)) + geom_density()+
+       geom_boxplot(fill = "#4271AE",       
+                    outlier.colour = "red", 
+                    alpha = 0.9)
+```
+
+Para profundizar más en los valores extremos, se obtiene dichos valores:
+
+```{r message= FALSE, warning=FALSE}
+boxplot.stats(df_sample_tiempo$air_temperature)$out
+boxplot.stats(df_sample_tiempo$dew_temperature)$out
+boxplot.stats(df_sample_tiempo$sea_level_pressure)$out
+boxplot.stats(df_sample_tiempo$wind_speed)$out
+boxplot.stats(df_sample_tiempo$meter_reading)$out
+```
+
+Tras observar los valores, se eliminan aquellos registros cuya temperatura del aire es superior a 50ºC o inferior a -25ºC dado que se consideran temperaturas muy extremas difíciles de conseguir.
+
+Del mismo modo, se eliminan aquellos registros que tienen más de 500K metros cuadrados, se supone que son megasuperficies poco comunes así como medidas de electricidad superiores a 1000.
+
+```{r message= FALSE, warning=FALSE}
+boxplot.stats(df_sample_tiempo$air_temperature)$out
+boxplot.stats(df_sample_tiempo$dew_temperature)$out
+boxplot.stats(df_sample_tiempo$sea_level_pressure)$out
+boxplot.stats(df_sample_tiempo$wind_speed)$out
+boxplot.stats(df_sample_tiempo$meter_reading)$out
+```
+
+```{r message= FALSE, warning=FALSE}
+df_sample_tiempo = df_sample_tiempo[df_sample_tiempo$air_temperature<=50 && df_sample_tiempo$air_temperature>=-25,]
+df_sample_tiempo = df_sample_tiempo[df_sample_tiempo$dew_temperature<=50 && df_sample_tiempo$dew_temperature>=-25,]
+df_sample_tiempo = df_sample_tiempo[df_sample_tiempo$square_feet<=500000,]
+df_sample_tiempo = df_sample_tiempo[df_sample_tiempo$meter_read<=1000,]
+```
+
+Además, se comprueban posibles valores extremos en la variable categórica primary_use
+
+```{r message= FALSE, warning=FALSE}
+barplot(table(df_sample_tiempo$primary_use))
+aggregate(df_sample_tiempo$primary_use, by=list(df_sample_tiempo$primary_use), FUN=length)
+```
+
+Se puede confirmar que no hace falta eliminar ningún valor extremo para esta variable
+
+
+# Análisis de los datos
+
+## Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
+
+El grupo de datos que se va a utilizar ya se ha seleccionado en los puntos anteriores de limpieza de datos.
+
+## Comprobación de la normalidad y homogeneidad de la varianza.
+
+```{r message= FALSE, warning=FALSE}
+barplot(table(df_sample_tiempo$primary_use))
+aggregate(df_sample_tiempo$primary_use, by=list(df_sample_tiempo$primary_use), FUN=length)
+```
+
+```{r message= FALSE, warning=FALSE}
+if(!require(pryr)){
+    install.packages('pryr', repos='http://cran.us.r-project.org')
+    library(pryr)
+}
+mem_used()
+```
+
+
+  
