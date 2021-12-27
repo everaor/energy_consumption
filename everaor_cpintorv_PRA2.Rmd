@@ -22,7 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Librerías que se utilizan en el desarrollo de la práctica:
 
-```{r,eval=FALSE,echo=FALSE,warning=FALSE}
+```{r,eval=TRUE,echo=FALSE,warning=FALSE,message=FALSE}
 # Librerías necesarias para la ejecución 
 if(!require(VIM)){
     install.packages('VIM', repos='http://cran.us.r-project.org')
