@@ -22,7 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Librerías que se utilizan en el desarrollo de la práctica:
 
-```{r,eval=TRUE,echo=FALSE,warning=FALSE}
+```{r,eval=FALSE,echo=FALSE,warning=FALSE}
 # Librerías necesarias para la ejecución 
 if(!require(VIM)){
     install.packages('VIM', repos='http://cran.us.r-project.org')
@@ -40,12 +40,93 @@ if(!require(nortest)){
     install.packages('nortest', repos='http://cran.us.r-project.org')
     library(nortest)
 }
+if(!require(PerformanceAnalytics)){
+    install.packages('PerformanceAnalytics', repos='http://cran.us.r-project.org')
+    library(PerformanceAnalytics)
+}
+if(!require(C50)){
+    install.packages('C50', repos='http://cran.us.r-project.org')
+    library(C50)
+}
 
 ```
 
 # Descripción del dataset
 
+El Dataset responde a un interés común de ambos alumnos por el estudio del consumo eléctrico en el contexto, cada día más popular, del cambio climático y los Objetivos de Desarrollo Sostenible..
+
+En la práctica 1, ya se comentó el interés de los autores del ejercicio especialmente en el objetivo 7 de generación de energía limpia y asequible.
+
+
+![](./ODS.png)
+
+En el anterior ejercicio se estudiaba la generación de consumo eléctrico así como el consumo, las diferentes fuentes de energía y su relación variables atmosféricas. El objetivo original de esta práctica era continuar con el mismo set de datos, sin embargo, por motivos pedagógicos hemos decidido utilizar un set de datos que nos diera más posibilidades de trabajo (mayor muestra, valores missing y variables categóricas).
+
+En esta ocasión se ha optado por seleccionar un set de datos del portal Kaggle. El objetivo de este dataset es el de encontrar maneras de mejorar la eficiencia energética de una serie de inmuebles gracias al conocimiento de las variables que inciden en el consumo eléctrico.
+
+Este dataset contiene información sobre el consumo eléctrico en un gran número de edificios a lo largo de un periodo de tres años. Igualmente, se seleccionan una serie de variables recogidas en el mismo momento como la temperatura del aire, la dirección y velocidad del viento, el tamaño del edificio.
+
+La variable considerada como target es por tanto el consumo eléctrico y las variables independientes son las siguientes:
+
+- primary_use: Uso principal del inumeble. Variable categórica que recoge si su uso principal es la vivienda, la educación, la sanidad, oficinas, edificios públicos…
+
+- year_built: Año de construcción del edificio (año)
+
+- floor_count: Número de pisos del edificio (número)
+
+- air_temperature: Temperatura del aire (medido en celsius)
+
+- cloud_coverage: Porcentaje del cielo cubierto por nubes (medido en porcentaje)
+
+- dew_temperature: Es una medición de la temperatura relacionada con la humedad y la presión atmosférica (medido en celsius)
+
+- precip_depth_1_hr: Precipitación por horas (medido en mililitros)
+
+- sea_level_pressure: Nivel de presión (medido en milibares)
+
+- wind_direction: Dirección del viento (de 0 a 360 grados)
+
+- wind_speed: Velocidad del viento (medido en metros por segundo)
+
 # Integración y selección de datos a analizar
+
+La información originalmente está repartida en tres bases de datos diferentes:
+
+- train.csv: Que contiene toda la información relacionada con la medición de la temperatura utilizada junto con un id_building (identificador del edificio).
+
+- building_meta.csv: Con información del edificio en cuanto a año de construcción, tamaño, número de plantas etc con el building_id (identificador del edificio) y el site_id (identificador climatológico).
+
+- weather.csv: Contiene toda la información meteorológica como la temperatura, la presión, la velocidad y dirección del viento… asíc omo un site_id (identificador climatológico).
+
+Con el fin de trabajar con la base de datos se unifican los tres ficheros en uno (energy.csv) de la siguiente manera:
+
+![](./integration.png)
+
+Mediante esta unión se obtiene una bbdd con 12 millones de mediciones de consumo energético.
+
+## Código que se ha utilizado para integrar los datos
+
+Lectura de los tres ficheros:
+
+*train = pd.read_csv('C:/Users/c_pin/Downloads/ashrae-energy-prediction/train.csv',sep=',')*
+
+*building_meta = pd.read_csv('C:/Users/c_pin/Downloads/ashrae-energy-prediction/building_metadata.csv',sep=',')*
+
+*weather_train= pd.read_csv('C:/Users/c_pin/Downloads/ashrae-energy-prediction/weather_train.csv',sep=',')*
+
+Cruzar los tres ficheros:
+
+*weather_building = pd.merge(weather_train,building_meta, how='inner',on='site_id')*
+
+*df_initial = pd.merge(weather_building,train, how='inner',on=['building_id','timestamp'])*
+
+Exportar los tres ficheros
+
+*df_initial.to_csv('C:/Users/c_pin/Downloads/ashrae-energy-prediction/energy.csv',index=False, header=True)*
+
+Para reducir la base de datos nos quedaremos únicamente con el tipo de medida 0: electricidad
+
+*df_tiempo_electricity = df_tiempo[df_tiempo$meter==0,]*
 
 Lectura y carga del fichero CSV
 
@@ -105,7 +186,12 @@ Para no eliminar los datos, se podrían imputar de diferentes formas como aplica
 Se seleccionan 50K casos con un muestreo aleatorio para que no se produzcan problemas de rendimiento del sistema.
 
 ```{r message= FALSE, warning=FALSE}
-df_sample_tiempo = df_tiempo_select[sample(nrow(df_tiempo_select), 5000), ]
+df_sample_tiempo = df_tiempo_select[sample(nrow(df_tiempo_select), 50000), ]
+
+write.csv(df_sample_tiempo, file ='./energy_sample.csv', sep= ',')
+df_sample_tiempo = read.csv('./energy_sample.csv',sep=',')
+
+
 
 # Se obtienen de nuevo los valores missing
 sapply(df_sample_tiempo, function(x) sum(is.na(x)))
@@ -242,6 +328,185 @@ fligner.test(meter_reading ~ primary_use, data = df_sample_tiempo)
 
 El resultado es que la varianza no es constante entre los diferentes niveles de la variable primary_use.
 
+## Analisis de correlaciones
+
+Realizamos un análisis de correlaciones de las variables numéricas:
+
+```{r}
+columns <- c("air_temperature","dew_temperature","sea_level_pressure","wind_direction",
+  "wind_speed","square_feet","meter_reading")
+df_sample_tiempo_numeric = df_sample_tiempo[columns]
+
+chart.Correlation(df_sample_tiempo_numeric, histogram = FALSE, method = "pearson")
+
+```
+
+Existe una alta colinealidad entre las variables "air temperature" y "dew temperature", nos quedamos
+con la primera ya que tiene una mayor correlación con la variable target "meter reading"
+
+Por otro lado también observamos que las dos variables con mayor capacidad predictiva a priori son 
+"square feet" y "wind speed" lo que tiene sentido ya que cuanto mayor sea el inmueble y más fuerza
+tenga el viento se esperará un mayor consumo.
+
+Nos llama la atención que la variable temperatura (en sus dos formatos) apenas tenga correlación 
+con la variable consumo ya que cabría esperar que tuviera forma de "U" en el caso de que se utilizara
+la electricidad para calentar y enfriar un edificio o ascendente si sólo se utilizara para enfriarlo.
+
+Por último, decidimos eliminar la variable "wind direction" ya que además de carecer de sentido desde
+el punto de vista teórico (aumentar el consumo en función de la dirección del viento), apenas vemos
+relación con la variable target.
+
+## ¿Existe un mayor consumo de energía cuando la temperatura del aire supera los 21 grados?
+
+Se considera la temperatura de confort en un ser humano cuando no supera los 21 grados. A partir
+de esta temperatura cabría esperar un comportamiento habitual por el que se realice un mayor consumo
+energético.
+
+Nos planteamos por tanto la siguiente hipótesis: El consumo energético de un edificio es de media
+significativamente mayor cuando la temperatura del aire es superior a 21 grados que cuando es inferior.
 
 
+Establecemos por tanto la hipótesis nula de que la media en los inumebles con temperatura menor a 21 grados es igual que aquellos en que es mayor
+
+Establecemos la hipótesis alternativa de que esta media no es igual (en concreto es mayor).
+
+H0: $\mu_1-\mu_2=\delta_0$
+
+H1: $\mu_1-\mu_2\gt \delta_0$
+
+Para contrastar la hipótesis utilizamos la variable temperatura y generamos dos tramos de valores: menor a 21 y mayor a 21 y realizamos calculamos el estadístico de diferencia de medias para dos muestraS.
+
+```{r}
+df_sample_tiempo_numeric$temp_superior = ifelse(df_sample_tiempo_numeric["air_temperature"]>=21,"superior", "inferior")
+barplot(table(df_sample_tiempo_numeric$temp_superior))
+```
+
++
+```{r}
+df_sample_tiempo_numeric.alta_temperatura = df_sample_tiempo_numeric[df_sample_tiempo_numeric$temp_superior=="superior",]$meter_reading
+df_sample_tiempo_numeric.baja_temperatura = df_sample_tiempo_numeric[df_sample_tiempo_numeric$temp_superior=="inferior",]$meter_reading
+
+t.test(df_sample_tiempo_numeric.alta_temperatura ,df_sample_tiempo_numeric.baja_temperatura , alternative = "greater")
+```
+
+Podemos afirmar con un alfa de 0.05 que el consumo cuando la temperatura es igual o superior a 21 grados es mayor que cuando la temperatura es inferior a los 21 grados.
+
+## Modelo de regresión lineal
+
+Se transforma la variable categórica (primary_use) en cinco variables dicotómicas para que puedan ser usadas en modelos de regresión. Estas cinco variables se llamarán:
+
+  - educacion
   
+  - oficina
+  
+  - entretenimiento
+  
+  - servicios públicos
+  
+  - residencial
+  
+```{r}
+df_sample_tiempo$educacion = ifelse(df_sample_tiempo["primary_use"]=='Education', 1, 0)
+df_sample_tiempo$oficina = ifelse(df_sample_tiempo["primary_use"]=='Office', 1, 0)
+df_sample_tiempo$entretenimiento = ifelse(df_sample_tiempo["primary_use"]=='Entertainment/public assembly', 1, 0)
+df_sample_tiempo$servicios_publicos = ifelse(df_sample_tiempo["primary_use"]=='Public services', 1, 0)
+df_sample_tiempo$residencial = ifelse(df_sample_tiempo["primary_use"]=='Lodging/residential', 1, 0)
+```
+
+No hemos generado una variable "Others" ya que esta sexta variable sería linealmente dependiente de las otras cinco por lo que no aportaría nada al modelo. 
+
+```{r}
+modelo_meter_read<- lm(meter_reading ~ air_temperature + sea_level_pressure + wind_speed + square_feet + educacion + oficina + entretenimiento + servicios_publicos + residencial, data=df_sample_tiempo )
+summary(modelo_meter_read)
+```
+El ajuste del modelo no es excesivamente alto pero se puede valorar qué variables son las que tienen más peso a la hora definir el modelo. Las que tienen más peso son las variables que se han creado con los distintos usos del edificio y square_feet que ya se había visto antes que era la que más correlación tenía. El wind_speed y air_temperature también aportan al modelo aunque en menor medida y por último la presión y la constante tiene p-values superiores a 0.05 y realmente no estarían aportando nada.
+
+La fórmula del modelo quedaría de la siguiente forma:
+
+$meterReading=0.387airTemperature + -0.573windSpeed + 0.0011squareFeet$
+$+ 84.85educacion + 59.21oficina + 40.85entretenimiento + 37.1serviciosPublicos + 34.66residencial $
+
+De todas las que son binarias son positivas pero se puede ver que cuando el uso es para educación u oficina el consumo energético es mayor mientras que cuando es residencial o servicios públicos es menor. 
+
+
+## Árbol de decisión
+
+Hacemos un segundo modelo de clasificación en el que queremos detectar cuales son las variables predictoras de un alto consumo energético. En primer lugar categorizamos la variable meter_reading en función de si tiene un consumo superior a los 100 Kw.
+
+
+```{r}
+df_sample_tiempo$alto_consumo = as.factor(ifelse(df_sample_tiempo["meter_reading"]>=100, 1, 0))
+barplot(table(df_sample_tiempo$alto_consumo))
+```
+
+```{r}
+y = df_sample_tiempo$alto_consumo
+variables_x <- c("air_temperature", "wind_speed", "square_feet", "primary_use")
+x = df_sample_tiempo[variables_x]
+```
+
+```{r, WARNING=FALSE}
+modelo <- C50::C5.0(x,y,rules=TRUE, )
+# summary(modelo)
+```
+
+Tras la aplicación de un modelo de árbol de clasificación, se pueden obtener numerosas reglas de asosiación entre valores. Algún ejemplo de las reglas que salen son las siguientes:
+
+Rule 132: (17, lift 2.6)
+
+	wind_speed > 4.1
+	
+	square_feet > 283000
+	
+	square_feet <= 288800
+	
+	primary_use = Education
+	
+	->  class 1  [0.947]
+
+Rule 133: (35/1, lift 2.6)
+
+	square_feet > 11143
+	
+	square_feet <= 13728
+	
+	primary_use = Healthcare
+	
+	->  class 1  [0.946]
+
+**Nota**: No se han imprimido todas las reglas resultantes del árbol de decisión porque salían muchas y superaba el número de páginas que ha de contener la memoria de la práctica
+
+- Rule 132: Si el uso es para educación y tiene entre 283000 y 288800 pies cuadrados y la velocidad del aire superior a 4.1 m/s entonces asigna a alto consumo con una confianza del 94.7%.
+
+- Rule 133: Si el uso es para sanidad y tiene entre 11143 y 13728 se clasifica en alto consumo con una confianza del 94.6%
+
+Las tres variables van en consonancia con la regresión lineal, las que tienen más peso son las de square_feet y la de primary_use. Tiene un grado de precisión superior al 92% aunque se desconoce la capacidad de generalizar del modelo.
+
+# Conclusiones
+
+Las conclusiones de esta práctica son las siguientes:
+
+- Se han utilizado tres conjuntos de datos obtenidos de la plataforma Kagle relacionados con el consumo de energía en función de diferentes parámetros metereológicos enmarcando esta práctica dentro de los Objetivos de Desarrollo Sostenible, en concreto el númeror 7 que indica que se debe de alcanzar una energía asequible y no contaminante.
+
+- Se han integrado los tres conjuntos de datos en uno único obteniendo 12 millones de mediciones de consumo energético añadiendo el código utilizado para la integración.
+
+- Se ha realizado un análisis previo de las variables del conjunto de datos seleccionando 12 variables que se han considerado que podían aportar valor en el análisis.
+
+- Se han analizado los valores vacíos para las variables seleccionadas decidiendo cuáles se dejaban para el análisis e incluso eliminando alguna que podía aportar ruido en los  pasos posteriores
+
+- Para imputar los valores nulos se ha utilizado el método kNN de la librería VIM, algoritmo supervisado que clasifica los datos en función de los vecinos.
+
+- Se han analizado todos los valores extremos de las variables y en aquellos casos que se ha considerado oportuno se han eliminado los registros que no eran necesarios para el análisis.
+
+- Se ha aplicado el test de normalidad Kolmogorov-Smirnov valorando que ninguna variable tiene una distribución normal.
+
+- Se han analizado las correlaciones entre variables concluyendo que las que más relación tienen son la temperatura del aire y el punto de temperatura del rocío. 
+
+- Aplicando un contraste de hipótesis de las medias se ha podido afirmar que existe mayor consumo de energía cuando la temperatura del aire supera los 21 grados.
+
+- Se ha construido un modelo de regresión lineal observando que cuando se trata de una oficina o de un edificio destinado a la educación aumenta notablemente el uso energético.
+
+- Con un árbol de decisión se han obtenido una serie de reglas para poder clasificar si se trata de una instalación de alto consumo o de bajo consumo en función de los diferentes parámetros utilizados en la práctica.
+
+Concluyendo, se ha podido realizar un análisis previo acerca del consumo energético en función de distintos parámetros que pueden ayudar a las organizaciones y a las personas a ser más conscientes del consumo energético que generan para así hacer este mundo más sostenible.
+
