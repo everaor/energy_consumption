@@ -7,4 +7,5 @@
 - PEC-header.html: Código para la cabecera del Rmarkdown.
 - everaor_cpintorv_PRA2.html: Resultado de la ejecución en html.
 - everaor_cpintorv_PRA2.Rmd: Códgio en R con el resultado de la práctica.
-- energy.zip: Compresión del dataset y compartido en Drive por elevado tamaño --> https://drive.google.com/file/d/1zwZICBOt73RwdiLl_HKBxFDexT6C6TIv/view?usp=sharing
+- energy.zip: Compresión del dataset unificado con las diferentes fuentes de datos y compartido en Drive por elevado tamaño --> https://drive.google.com/file/d/1zwZICBOt73RwdiLl_HKBxFDexT6C6TIv/view?usp=sharing
+- ficheros iniciales (kaggle): https://drive.google.com/file/d/1hpbT1OaHh24cWYaTb5IbHbLcqQo8UrMp/view?usp=sharing
